@@ -77,7 +77,7 @@ def get_c4(nsamples, seed, seqlen, model):
         while True:
             i = random.randint(0, len(traindata) - 1)
             trainenc = tokenizer(traindata[i]['text'], return_tensors='pt')
-            if trainenc.input_ids.shape[1] >= seqlen:
+            if trainenc.input_ids.shape[1] >= seqlen + 1:
                 break
         i = random.randint(0, trainenc.input_ids.shape[1] - seqlen - 1)
         j = i + seqlen
@@ -93,7 +93,7 @@ def get_c4(nsamples, seed, seqlen, model):
         while True:
             i = random.randint(0, len(valdata) - 1)
             tmp = tokenizer(valdata[i]['text'], return_tensors='pt')
-            if tmp.input_ids.shape[1] >= seqlen:
+            if tmp.input_ids.shape[1] >= seqlen + 1:
                 break
         i = random.randint(0, tmp.input_ids.shape[1] - seqlen - 1)
         j = i + seqlen
@@ -154,7 +154,7 @@ def get_c4_new(nsamples, seed, seqlen, model):
         while True:
             i = random.randint(0, len(traindata) - 1)
             trainenc = tokenizer(traindata[i]['text'], return_tensors='pt')
-            if trainenc.input_ids.shape[1] >= seqlen:
+            if trainenc.input_ids.shape[1] >= seqlen + 1:
                 break
         i = random.randint(0, trainenc.input_ids.shape[1] - seqlen - 1)
         j = i + seqlen
@@ -179,11 +179,60 @@ def get_c4_new(nsamples, seed, seqlen, model):
 def get_loaders(name, nsamples=128, seed=0, seqlen=2048, model=''):
     if 'wikitext2' in name:
         return get_wikitext2(nsamples, seed, seqlen, model)
-    if 'ptb' in name:
+    elif 'ptb' in name:
         if 'new' in name:
             return get_ptb_new(nsamples, seed, seqlen, model)
         return get_ptb(nsamples, seed, seqlen, model)
-    if 'c4' in name:
+    elif 'c4' in name:
         if 'new' in name:
             return get_c4_new(nsamples, seed, seqlen, model)
         return get_c4(nsamples, seed, seqlen, model)
+    elif "stack" in name:
+        return get_stack(nsamples, seed, seqlen, model)
+        
+def get_stack(nsamples, seed, seqlen, model):
+    languages = ["c++", "java", "javascript", "python"][:1]
+
+    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
+
+    seed = 0
+    size = 1000
+    test_samples = 150
+
+    trainloader = []
+    testloader = []
+
+    for language in languages:
+        thestack = load_dataset(
+            "bigcode/the-stack",
+            split="train",
+            streaming=True,
+            data_files=[f"data/{language}/*"],
+        )
+        # print(f"subset {language} loaded")
+        ds = thestack.shuffle(seed=seed)
+
+        # 10k subset of random samples from ds
+        small_ds = list(ds.take(size))
+        # convert to Datasets
+        small_ds = Dataset.from_pandas(pd.DataFrame(data=small_ds))
+
+        for i in range(len(small_ds)):
+            trainenc = tokenizer(small_ds[i]["content"], return_tensors="pt")["input_ids"]
+            if trainenc.shape[1] < seqlen + 1:
+                continue
+
+            i = random.randint(0, trainenc.shape[1] - seqlen - 1)
+            j = i + seqlen
+            inp = trainenc[:, i:j]
+
+            if len(trainloader) < nsamples:
+                tar = inp.clone()
+                tar[:, :-1] = -100
+                trainloader.append((inp, tar))
+            elif len(testloader) < test_samples:
+                testloader.append(inp)
+            else:
+                break
+
+    return trainloader, torch.cat(testloader, dim=-1)

@@ -13,7 +13,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "safetensors==0.3.0","datasets==2.10.1","sentencepiece","transformers","accelerate==0.17.1","triton==2.0.0","texttable","toml","numpy","protobuf==3.20.2",
+    "safetensors==0.3.0","datasets==2.10.1","sentencepiece","transformers","accelerate==0.17.1","triton==2.0.0","texttable","toml","numpy","protobuf==3.20.2","termcolor"
 ]
 
 [project.optional-dependencies]
